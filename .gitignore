@@ -1,0 +1,43 @@
+
+# Created by https://www.gitignore.io/api/scheme,racket,visualstudiocode
+# Edit at https://www.gitignore.io/?templates=scheme,racket,visualstudiocode
+
+### Racket ###
+# gitignore template for the Racket language
+# website: http://www.racket-lang.org/
+
+# DrRacket autosave files
+*.rkt~
+*.rkt.bak
+\#*.rkt#
+\#*.rkt#*#
+
+# Compiled racket bytecode
+compiled/
+*.zo
+
+# Dependency tracking files
+*.dep
+
+### Scheme ###
+*.ss~
+*.ss#*
+.#*.ss
+
+*.scm~
+*.scm#*
+.#*.scm
+
+### VisualStudioCode ###
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+### VisualStudioCode Patch ###
+# Ignore all local history of files
+.history
+
+# End of https://www.gitignore.io/api/scheme,racket,visualstudiocode
+

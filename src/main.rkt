@@ -43,13 +43,21 @@
   (unop f s)
   (my-if c tb fb)  
   (seqn expr1 expr2)  
-  (lcal defs body))
-
+  (lcal defs body)
+  ;; Clases en el AST
+  (class members)
+  (new class-id)
+  (get obj field)
+  (set obj field new-field)
+  (this)
+  (field id expr)
+  (method id args body)
+)
 ;; values
 (deftype Val
   (numV n)
   (boolV b))
-
+;; definiciones de ambiente
 (deftype Def
   (my-def id expr))
 
@@ -112,28 +120,39 @@ Este método no crea un nuevo ambiente.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; parse :: s-expr -> Expr
-(define (parse s-expr)
+(define (parse s-expr [inner #f])
   (match s-expr
     [(? number?) (num s-expr)]
     [(? symbol?) (id s-expr)]    
     [(? boolean?) (bool s-expr)]
-    [(list '* l r) (binop * (parse l) (parse r))]
-    [(list '+ l r) (binop + (parse l) (parse r))]
-    [(list '- l r) (binop - (parse l) (parse r))]
-    [(list '< l r) (binop < (parse l) (parse r))]
-    [(list '= l r) (binop = (parse l) (parse r))]    
-    [(list 'or l r) (binop (λ (i d) (or i d)) (parse l) (parse r))]
-    [(list 'and l r) (binop (λ (i d) (and i d)) (parse l) (parse r))]
-    [(list 'not b) (unop not (parse b))]
-    [(list 'if c t f) (my-if (parse c)
-                             (parse t)
-                             (parse f))]
-    [(list 'seqn e1 e2) (seqn (parse e1) (parse e2))]    
+    [(list '* l r) (binop * (parse l inner) (parse r inner))]
+    [(list '+ l r) (binop + (parse l inner) (parse r inner))]
+    [(list '- l r) (binop - (parse l inner) (parse r inner))]
+    [(list '< l r) (binop < (parse l inner) (parse r inner))]
+    [(list '= l r) (binop = (parse l inner) (parse r inner))]    
+    [(list 'or l r) (binop (λ (i d) (or i d)) (parse l inner) (parse r inner))]
+    [(list 'and l r) (binop (λ (i d) (and i d)) (parse l inner) (parse r inner))]
+    [(list 'not b) (unop not (parse b inner))]
+    [(list 'if c t f) (my-if (parse c inner)
+                             (parse t inner)
+                             (parse f inner))]
+    [(list 'seqn e1 e2) (seqn (parse e1 inner) (parse e2 inner))]    
     [(list 'local (list e ...)  b)
-     (lcal (map parse-def e) (parse b))]
+     (lcal (map parse-def e) (parse b inner))]
+    [(list 'class members ...) (class (map parse-class members))]
+    [(list 'this) (if inner
+                      (this)
+                      (error "Parse error: this definition outside class"))]
+    [(list 'get obj fld-name) (get (parse obj inner) (parse fld-name inner))]
+    [(list 'set obj fld-name new-val) (set (parse obj inner) (parse fld-name inner) (parse new-val inner))] 
     ))
 
-
+;; parse-class ::= s-expr -> Expr
+;; parsea la definicion de una clase
+(define (parse-class member)
+  (match member
+    [(list 'field id value) (field id (parse value #t))]
+    [(list 'method id args-list body) (method id args-list (parse body #t))]))
 ;; parse-def :: s-expr -> Def
 (define (parse-def s-expr)
   (match s-expr

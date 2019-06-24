@@ -139,12 +139,14 @@ Este método no crea un nuevo ambiente.
     [(list 'seqn e1 e2) (seqn (parse e1 inner) (parse e2 inner))]    
     [(list 'local (list e ...)  b)
      (lcal (map parse-def e) (parse b inner))]
+    ;; Parser de clases nuevas, se le añade inner para saber si se puede o no usar this.
     [(list 'class members ...) (class (map parse-class members))]
     [(list 'this) (if inner
                       (this)
                       (error "Parse error: this definition outside class"))]
     [(list 'get obj fld-name) (get (parse obj inner) (parse fld-name inner))]
-    [(list 'set obj fld-name new-val) (set (parse obj inner) (parse fld-name inner) (parse new-val inner))] 
+    [(list 'set obj fld-name new-val) (set (parse obj inner) (parse fld-name inner) (parse new-val inner))]
+    [(list 'new class-id) (new (parse class-id inner))]
     ))
 
 ;; parse-class ::= s-expr -> Expr

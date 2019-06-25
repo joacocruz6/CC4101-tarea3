@@ -52,11 +52,14 @@
   (this)
   (field id expr)
   (method id args body)
+  (send obj m-id args)
 )
 ;; values
 (deftype Val
   (numV n)
-  (boolV b))
+  (boolV b)
+  (classV field-list methods-list)
+  (objectV obj-env methods-list))
 ;; definiciones de ambiente
 (deftype Def
   (my-def id expr))
@@ -147,6 +150,7 @@ Este método no crea un nuevo ambiente.
     [(list 'get obj fld-name) (get (parse obj inner) (parse fld-name inner))]
     [(list 'set obj fld-name new-val) (set (parse obj inner) (parse fld-name inner) (parse new-val inner))]
     [(list 'new class-id) (new (parse class-id inner))]
+    [(list 'send obj m-id args...) (send (parse obj inner) m-id (parse args... inner))]
     ))
 
 ;; parse-class ::= s-expr -> Expr
@@ -164,7 +168,8 @@ Este método no crea un nuevo ambiente.
 (define (interp expr env)
   (match expr
     [(num n) (numV n)]    
-    [(bool b) (boolV b)]    
+    [(bool b) (boolV b)]
+    [(id x) (env-lookup x env)]  
     [(binop f l r) (make-val (f (open-val (interp l env))
                                 (open-val (interp r env))))]
     [(unop f s) (make-val (f (open-val (interp s env))))]
@@ -173,7 +178,6 @@ Este método no crea un nuevo ambiente.
      (if cnd
          (interp t env)
          (interp f env))]
-    [(id x) (env-lookup x env)]        
     [(seqn expr1 expr2) (begin 
                           (interp expr1 env)
                           (interp expr2 env))]
@@ -184,14 +188,25 @@ Este método no crea un nuevo ambiente.
                      (extend-frame-env! (car in-def) (cdr in-def) new-env)
                      #t)) defs)       
        (interp body new-env))     
-     ]))
+     ]
+    [(class members) (classV (filter field? members) (filter method? members))]
+    [(new e) (def (classV field-list method-list) (interp e env))
+             (def obj-env (make-fields-env field-list env))
+             (objectV obj-env method-list)]
+    [(get e field)
+     (def (objectV obj-env method-list) (interp e env))
+     (def (id x) field)
+     (env-lookup x obj-env)]
+    #;[(send e method-name args)
+     (def (objectV obj-env method-list) (interp e env))
+     (def (method _ m-args m-body) (method-lookup method-name method-list))]))
+
 
 ;; open-val :: Val -> Scheme Value
 (define (open-val v)
   (match v
     [(numV n) n]
-    [(boolV b) b]
-    ))
+    [(boolV b) b]))
 
 ;; make-val :: Scheme Value -> Val
 (define (make-val v)
@@ -219,4 +234,6 @@ valores de MiniScheme para clases y objetos
   (match val
     [(numV n) n]
     [(boolV b) b]
+    [(classV _ _) '<class>]
+    [(objectV _ _) '<object>]
     [x x]))

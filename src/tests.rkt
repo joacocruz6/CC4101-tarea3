@@ -32,6 +32,12 @@
 (test (parse '{class
                   {method m () (this)}}) (class (list (method 'm '() (this)))))
 (test/exn (parse '{this}) "Parse error: this definition outside class")
+(test/exn (parse '{seqn (local
+                    ([define A
+                       (class
+                           (field x 2))])
+                    10)
+                        (this)}) "Parse error: this definition outside class")
 (test (run-val '{local
                   ([define A
                     (class

@@ -37,7 +37,21 @@
                        (class
                            (field x 2))])
                     10)
-                        (this)}) "Parse error: this definition outside class")
+                        this}) "Parse error: this definition outside class")
+
+;;Test of make fields enviroment
+(test (make-fields-env (list (field 'x (num 2))) empty-env) (aEnv (hash 'x (numV 2)) (mtEnv)))
+;;Test of fields
+
+
+;;General test for
+(test (run-val '{local
+                  ([define A
+                     (class
+                         (field x 2)
+                       (method m () (+ 2 2)))]
+                   [define o (new A)])
+                  (send o m)}) 4)
 (test (run-val '{local
                   ([define A
                     (class

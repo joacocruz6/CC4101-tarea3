@@ -59,7 +59,7 @@
   (numV n)
   (boolV b)
   (classV field-list methods-list)
-  (objectV obj-env methods-list))
+  (objectV obj-env field-list methods-list))
 ;; definiciones de ambiente
 (deftype Def
   (my-def id expr))
@@ -126,8 +126,14 @@ Este método no crea un nuevo ambiente.
 (define (parse s-expr [inner #f])
   (match s-expr
     [(? number?) (num s-expr)]
-    [(? symbol?) (id s-expr)]    
+    [(? symbol?)
+     (if (equal? 'this s-expr)
+         (if inner
+             (this)
+             (error "Parse error: this definition outside class"))
+         (id s-expr))]    
     [(? boolean?) (bool s-expr)]
+    ['() '()]
     [(list '* l r) (binop * (parse l inner) (parse r inner))]
     [(list '+ l r) (binop + (parse l inner) (parse r inner))]
     [(list '- l r) (binop - (parse l inner) (parse r inner))]
@@ -150,7 +156,7 @@ Este método no crea un nuevo ambiente.
     [(list 'get obj fld-name) (get (parse obj inner) (parse fld-name inner))]
     [(list 'set obj fld-name new-val) (set (parse obj inner) (parse fld-name inner) (parse new-val inner))]
     [(list 'new class-id) (new (parse class-id inner))]
-    [(list 'send obj m-id args...) (send (parse obj inner) m-id (parse args... inner))]
+    [(list 'send obj m-id args ...) (send (parse obj inner) m-id (parse args inner))]
     ))
 
 ;; parse-class ::= s-expr -> Expr
@@ -192,16 +198,48 @@ Este método no crea un nuevo ambiente.
     [(class members) (classV (filter field? members) (filter method? members))]
     [(new e) (def (classV field-list method-list) (interp e env))
              (def obj-env (make-fields-env field-list env))
-             (objectV obj-env method-list)]
+             (def mythis (box 'undefined))
+             (begin
+               (extend-frame-env! 'this mythis obj-env)
+               (def object-created (objectV obj-env field-list method-list))
+               (begin
+                 (set-box! mythis object-created)
+                 object-created))]
     [(get e field)
-     (def (objectV obj-env method-list) (interp e env))
+     (def (objectV obj-env field-list method-list) (interp e env))
      (def (id x) field)
-     (env-lookup x obj-env)]
-    #;[(send e method-name args)
-     (def (objectV obj-env method-list) (interp e env))
-     (def (method _ m-args m-body) (method-lookup method-name method-list))]))
-
-
+     (field-lookup x field-list obj-env)]
+    [(send e method-name args)
+     (def (objectV obj-env field-list method-list) (interp e env))
+     (def (method _ m-args m-body) (method-lookup method-name method-list))
+     (interp m-body (multi-extend-env m-args args obj-env))]
+    [(this) (unbox (env-lookup 'this env))]))
+;;make-fields-env ::= List[field] Env -> Env
+;;Generate the enviroment of fields of an object
+(define (make-fields-env fields env)
+  (match fields
+    ['() env]
+    [(cons (field id val) next)
+     (def field-value (interp val env))
+     (make-fields-env next (multi-extend-env (list id) (list field-value) env))]))
+;;field-lookup ::= symbol List[field] Env -> Val
+;; Performs the lookup of a field of a object
+(define (field-lookup id fields obj-env)
+  (match fields
+    ['() (error "field not found")]
+    [(cons (field fid val) next)
+     (if (equal? id fid)
+         (env-lookup id obj-env)
+         (field-lookup id next))]))
+;;method-lookup ::= symbol List[method] -> method/error if not found
+;;Finds the first ocurrence of the method of an object
+(define (method-lookup id method-list)
+  (match method-list
+    ['() (error "method not found")]
+    [(cons (method m-name m-args m-body) next)
+     (if (equal? m-name id)
+         (method m-name m-args m-body)
+         (method-lookup id next))]))
 ;; open-val :: Val -> Scheme Value
 (define (open-val v)
   (match v
@@ -235,5 +273,5 @@ valores de MiniScheme para clases y objetos
     [(numV n) n]
     [(boolV b) b]
     [(classV _ _) '<class>]
-    [(objectV _ _) '<object>]
+    [(objectV _ _ _) '<object>]
     [x x]))

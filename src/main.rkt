@@ -156,14 +156,14 @@ Este método no crea un nuevo ambiente.
     [(list 'get obj fld-name) (get (parse obj inner) (parse fld-name inner))]
     [(list 'set obj fld-name new-val) (set (parse obj inner) (parse fld-name inner) (parse new-val inner))]
     [(list 'new class-id) (new (parse class-id inner))]
-    [(list 'send obj m-id args ...) (send (parse obj inner) m-id (parse args inner))]
+    [(list 'send obj m-id args ...) (send (parse obj inner) m-id args)]
     ))
 
 ;; parse-class ::= s-expr -> Expr
 ;; parsea la definicion de una clase
 (define (parse-class member)
   (match member
-    [(list 'field id value) (field id (parse value #t))]
+    [(list 'field id value) (field id (parse value))]
     [(list 'method id args-list body) (method id args-list (parse body #t))]))
 ;; parse-def :: s-expr -> Def
 (define (parse-def s-expr)
@@ -208,21 +208,27 @@ Este método no crea un nuevo ambiente.
     [(get e field)
      (def (objectV obj-env field-list method-list) (interp e env))
      (def (id x) field)
-     (field-lookup x field-list obj-env)]
+     (unbox (field-lookup x field-list obj-env))]
     [(send e method-name args)
      (def (objectV obj-env field-list method-list) (interp e env))
      (def (method _ m-args m-body) (method-lookup method-name method-list))
-     (interp m-body (multi-extend-env m-args args obj-env))]
-    [(this) (unbox (env-lookup 'this env))]))
+     (interp m-body (multi-extend-env m-args (map (lambda (x) (interp x env)) (map parse args)) obj-env))]
+    [(this) (unbox (env-lookup 'this env))]
+    [(set e field-id v)
+     (def (objectV obj-env field-list method-list) (interp e env))
+     (def (id x) field-id)
+     (def new-val (interp v env))
+     (def exists (field-lookup x field-list obj-env))
+     (set-box! exists new-val)]))
 ;;make-fields-env ::= List[field] Env -> Env
 ;;Generate the enviroment of fields of an object
 (define (make-fields-env fields env)
   (match fields
     ['() env]
     [(cons (field id val) next)
-     (def field-value (interp val env))
+     (def field-value (box (interp val env)))
      (make-fields-env next (multi-extend-env (list id) (list field-value) env))]))
-;;field-lookup ::= symbol List[field] Env -> Val
+;;field-lookup ::= symbol List[field] Env -> box
 ;; Performs the lookup of a field of a object
 (define (field-lookup id fields obj-env)
   (match fields
@@ -230,7 +236,7 @@ Este método no crea un nuevo ambiente.
     [(cons (field fid val) next)
      (if (equal? id fid)
          (env-lookup id obj-env)
-         (field-lookup id next))]))
+         (field-lookup id next obj-env))]))
 ;;method-lookup ::= symbol List[method] -> method/error if not found
 ;;Finds the first ocurrence of the method of an object
 (define (method-lookup id method-list)

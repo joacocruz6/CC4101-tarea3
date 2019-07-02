@@ -59,7 +59,7 @@
   (numV n)
   (boolV b)
   (classV field-list methods-list)
-  (objectV obj-env field-list methods-list))
+  (objectV obj-env class-ref))
 ;; definiciones de ambiente
 (deftype Def
   (my-def id expr))
@@ -201,21 +201,21 @@ Este método no crea un nuevo ambiente.
              (def mythis (box 'undefined))
              (begin
                (extend-frame-env! 'this mythis obj-env)
-               (def object-created (objectV obj-env field-list method-list))
+               (def object-created (objectV obj-env (classV field-list method-list)))
                (begin
                  (set-box! mythis object-created)
                  object-created))]
     [(get e field)
-     (def (objectV obj-env field-list method-list) (interp e env))
+     (def (objectV obj-env (classV field-list method-list)) (interp e env))
      (def (id x) field)
      (unbox (field-lookup x field-list obj-env))]
     [(send e method-name args)
-     (def (objectV obj-env field-list method-list) (interp e env))
+     (def (objectV obj-env (classV field-list method-list)) (interp e env))
      (def (method _ m-args m-body) (method-lookup method-name method-list))
      (interp m-body (multi-extend-env m-args (map (lambda (x) (interp x env)) (map parse args)) obj-env))]
     [(this) (unbox (env-lookup 'this env))]
     [(set e field-id v)
-     (def (objectV obj-env field-list method-list) (interp e env))
+     (def (objectV obj-env (classV field-list method-list)) (interp e env))
      (def (id x) field-id)
      (def new-val (interp v env))
      (def exists (field-lookup x field-list obj-env))
@@ -279,5 +279,5 @@ valores de MiniScheme para clases y objetos
     [(numV n) n]
     [(boolV b) b]
     [(classV _ _) '<class>]
-    [(objectV _ _ _) '<object>]
+    [(objectV _ _) '<object>]
     [x x]))

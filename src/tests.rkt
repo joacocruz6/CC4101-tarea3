@@ -44,11 +44,11 @@
 ;;Test of make fields enviroment
 #;(test (make-fields-env (list (field 'x (num 2))) empty-env) (aEnv (hash 'x (numV 2)) (mtEnv))) ;; Falla por como esta implementado hash :/
 ;;Test of field lookup
-(test (field-lookup 'x (list (field 'x (num 2)) (field 'y (bool #f))) (make-fields-env (list (field 'x (num 2)) (field 'y (bool #f))) empty-env)) (box (numV 2)))
-(test/exn (field-lookup 'z (list (field 'x (num 2)) (field 'y (bool #f))) (make-fields-env (list (field 'x (num 2)) (field 'y (bool #f))) empty-env)) "field not found")
+(test (field-lookup 'x (list (field 'x (num 2)) (field 'y (bool #f))) object (make-fields-env (list (field 'x (num 2)) (field 'y (bool #f))) object empty-env)) (box (numV 2)))
+(test/exn (field-lookup 'z (list (field 'x (num 2)) (field 'y (bool #f))) object (make-fields-env (list (field 'x (num 2)) (field 'y (bool #f))) object empty-env)) "field not found")
 ;;Test of method lookup
-(test (method-lookup 'm (list (method 'm '() (binop + (num 1) (num 2))) (method 'foo '() (this)))) (method 'm '() (binop + (num 1) (num 2))))
-(test/exn (method-lookup 'bar (list (method 'm '() (binop + (num 1) (num 2))) (method 'foo '() (this)))) "method not found")
+(test (method-lookup 'm (list (method 'm '() (binop + (num 1) (num 2))) (method 'foo '() (this))) object) (method 'm '() (binop + (num 1) (num 2))))
+(test/exn (method-lookup 'bar (list (method 'm '() (binop + (num 1) (num 2))) (method 'foo '() (this))) object) "method not found")
 ;;General test for main
 (test (run-val '{local
                   ([define A
@@ -120,7 +120,7 @@
                    (define x 11)
                    (define o (new c))]
                   (send o sum)}) 12)
-(test     (run-val '(local
+(test (run-val '(local
                 [(define x 10)
                  (define A
                    (class
@@ -144,7 +144,7 @@ Test para soporte de herencia
                 {method m () (+ 1 2)}}) (class (id 'c1) (list (method 'm '() (binop + (num 1) (num 2))))))
 (test (parse '{class
                   <: c1
-                {method m () (super h 10)}}) (class (id 'c1) (list (method 'm '() (super (id 'h) (num 10))))))
+                {method m () (super h 10)}}) (class (id 'c1) (list (method 'm '() (super 'h '(10))))))
                 
 (test/exn (parse '{this}) "Parse error: this definition outside class")
 (test/exn (parse '{seqn (local
@@ -153,3 +153,57 @@ Test para soporte de herencia
                            (field x 2))])
                     10)
                         this}) "Parse error: this definition outside class")
+;; Test para el interprete
+(test (run-val '{local
+                  [{define c1 {class
+                                 {method h (x) {+ 1 x}}}}
+                   {define c2 {class <: c1
+                                {method m () {+ 4 10}}}}
+                   {define o (new c2)}]
+                  (send o h 10)}) 11)
+
+(test (run-val '{local
+                  [{define c1 {class
+                                 {method h (x) {+ 1 x}}}}
+                   {define c2 {class <: c1
+                                {method h (x) {+ 4 x}}}}
+                   {define o (new c2)}]
+                  (send o h 10)}) 14)
+(test (run-val '(local
+              [(define c1 (class
+                              (method f (z) (< z 7))))
+               (define c (class <: c1))
+               (define o (new c))]
+              (send o f 20))) #f)
+(test/exn (run-val '{local
+                  [{define c1 {class
+                                 {method p (x) {+ 1 x}}}}
+                   {define c2 {class <: c1
+                                {method s (x) {+ 4 x}}}}
+                   {define o (new c2)}]
+                  (send o h 10)}) "method not found")
+
+(test (run-val '{local
+                  [{define c1 {class
+                                 {method h (x) {+ 1 x}}}}
+                   {define c2 {class <: c1
+                                {method m () {super h 10}}}}
+                   {define o (new c2)}]
+                  (send o m)}) 11)
+(test (run-val '{local
+                  [{define x 4}
+                   {define c1 {class
+                                  {method h (y) {+ y x}}}}
+                   {define c2 {class <: c1
+                                {method m () {super h 10}}}}
+                   {define o {new c2}}]
+                  {send o m}}) 14)
+(test (run-val '{local
+                  [{define x 4}
+                   {define c1 {class
+                                  {method h (y) {+ y x}}}}
+                   {define x 5}
+                   {define c2 {class <: c1
+                                {method m () {super h 10}}}}
+                   {define o {new c2}}]
+                  {send o m}}) 14)

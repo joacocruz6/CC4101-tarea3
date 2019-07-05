@@ -59,7 +59,7 @@
 (deftype Val
   (numV n)
   (boolV b)
-  (classV field-list methods-list)
+  (classV parent-class field-list methods-list)
   (objectV obj-env class-ref))
 ;; definiciones de ambiente
 (deftype Def
@@ -156,9 +156,9 @@ Este método no crea un nuevo ambiente.
     [(list 'this) (if inner
                       (this)
                       (error "Parse error: this definition outside class"))]
-    [(list 'super method-name args)
+    [(list 'super method-name args ...)
      (if inner
-         (super (parse method-name) (parse args #t))
+         (super method-name args)
          (error "Parse error: can't use super outside of a method"))]
     [(list 'get obj fld-name) (get (parse obj inner) (parse fld-name inner))]
     [(list 'set obj fld-name new-val) (set (parse obj inner) (parse fld-name inner) (parse new-val inner))]
@@ -202,57 +202,74 @@ Este método no crea un nuevo ambiente.
                      #t)) defs)       
        (interp body new-env))     
      ]
-    [(class super-class members) (classV (filter field? members) (filter method? members))]
-    [(new e) (def (classV field-list method-list) (interp e env))
-             (def obj-env (make-fields-env field-list env))
+    [(class super-class members)
+     (if (and (equal? 'undefined super-class) (equal? '() members))
+         (classV 'undefined '() '())
+         (classV (interp super-class env) (filter field? members) (filter method? members)))]
+    [(new e) (def (classV super-class field-list method-list) (interp e env))
+             (def obj-env (make-fields-env field-list super-class env))
              (def mythis (box 'undefined))
              (begin
                (extend-frame-env! 'this mythis obj-env)
-               (def object-created (objectV obj-env (classV field-list method-list)))
+               (def object-created (objectV obj-env (classV super-class field-list method-list)))
                (begin
                  (set-box! mythis object-created)
                  object-created))]
     [(get e field)
-     (def (objectV obj-env (classV field-list method-list)) (interp e env))
+     (def (objectV obj-env (classV super-class field-list method-list)) (interp e env))
      (def (id x) field)
-     (unbox (field-lookup x field-list obj-env))]
+     (unbox (field-lookup x field-list super-class obj-env))]
     [(send e method-name args)
-     (def (objectV obj-env (classV field-list method-list)) (interp e env))
-     (def (method _ m-args m-body) (method-lookup method-name method-list))
-     (interp m-body (multi-extend-env m-args (map (lambda (x) (interp x env)) (map parse args)) obj-env))]
+     (def (objectV obj-env (classV super-class field-list method-list)) (interp e env))
+     (def (method _ m-args m-body) (method-lookup method-name method-list super-class))
+     (def m-env (multi-extend-env m-args (map (lambda (x) (interp x env)) (map parse args)) obj-env))
+     (begin
+       (extend-frame-env! 'super super-class m-env)
+       (interp m-body m-env))]
     [(this) (unbox (env-lookup 'this env))]
     [(set e field-id v)
-     (def (objectV obj-env (classV field-list method-list)) (interp e env))
+     (def (objectV obj-env (classV super-class field-list method-list)) (interp e env))
      (def (id x) field-id)
      (def new-val (interp v env))
-     (def exists (field-lookup x field-list obj-env))
-     (set-box! exists new-val)]))
-;;make-fields-env ::= List[field] Env -> Env
+     (def exists (field-lookup x field-list super-class obj-env))
+     (set-box! exists new-val)]
+    [(super name args)
+     (def (classV super-class sfields smethods) (env-lookup 'super env))
+     (def (method _ m-args m-body) (method-lookup name smethods super-class))
+     (def m-env (multi-extend-env m-args (map (lambda (x) (interp x env)) (map parse args)) env))
+     (begin
+       (extend-frame-env! 'super super-class m-env)
+       (interp m-body m-env))]))
+;;make-fields-env ::= List[field] ClassV Env -> Env
 ;;Generate the enviroment of fields of an object
-(define (make-fields-env fields env)
+(define (make-fields-env fields super-class env)
   (match fields
     ['() env]
     [(cons (field id val) next)
      (def field-value (box (interp val env)))
-     (make-fields-env next (multi-extend-env (list id) (list field-value) env))]))
+     (make-fields-env next super-class (multi-extend-env (list id) (list field-value) env))]))
 ;;field-lookup ::= symbol List[field] Env -> box
 ;; Performs the lookup of a field of a object
-(define (field-lookup id fields obj-env)
+(define (field-lookup id fields super-class obj-env)
   (match fields
     ['() (error "field not found")]
     [(cons (field fid val) next)
      (if (equal? id fid)
          (env-lookup id obj-env)
-         (field-lookup id next obj-env))]))
+         (field-lookup id next super-class obj-env))]))
 ;;method-lookup ::= symbol List[method] -> method/error if not found
 ;;Finds the first ocurrence of the method of an object
-(define (method-lookup id method-list)
+(define (method-lookup id method-list super-class)
   (match method-list
-    ['() (error "method not found")]
+    ['()
+     (def (classV parent _ parent-methods) super-class) 
+     (if (equal? super-class object)
+         (error "method not found")
+          (method-lookup id parent-methods parent))]
     [(cons (method m-name m-args m-body) next)
      (if (equal? m-name id)
          (method m-name m-args m-body)
-         (method-lookup id next))]))
+         (method-lookup id next super-class))]))
 ;; open-val :: Val -> Scheme Value
 (define (open-val v)
   (match v
@@ -280,11 +297,12 @@ run-val:: s-expr -> Scheme-Val + Val
 Versión alternativa de run, que retorna valores de scheme para primitivas y
 valores de MiniScheme para clases y objetos
 |#
+(define object (interp object-class empty-env))
 (define (run-val s-expr)
   (define val (interp (parse s-expr) empty-env))
   (match val
     [(numV n) n]
     [(boolV b) b]
-    [(classV _ _) '<class>]
+    [(classV _ _ _) '<class>]
     [(objectV _ _) '<object>]
     [x x]))

@@ -45,11 +45,12 @@
   (seqn expr1 expr2)  
   (lcal defs body)
   ;; Clases en el AST
-  (class members)
+  (class super-class members)
   (new class-id)
   (get obj field)
   (set obj field new-field)
   (this)
+  (super method-name args)
   (field id expr)
   (method id args body)
   (send obj m-id args)
@@ -121,9 +122,10 @@ Este método no crea un nuevo ambiente.
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
+;; definicion de object
+(define object-class (class 'undefined '()))
 ;; parse :: s-expr -> Expr
-(define (parse s-expr [inner #f])
+(define (parse s-expr [inner #f] [inner-super #f])
   (match s-expr
     [(? number?) (num s-expr)]
     [(? symbol?)
@@ -149,10 +151,15 @@ Este método no crea un nuevo ambiente.
     [(list 'local (list e ...)  b)
      (lcal (map parse-def e) (parse b inner))]
     ;; Parser de clases nuevas, se le añade inner para saber si se puede o no usar this.
-    [(list 'class members ...) (class (map parse-class members))]
+    [(list 'class '<: super-class members ...) (class (parse super-class) (map parse-class members))]
+    [(list 'class members ...) (class object-class (map parse-class members))]
     [(list 'this) (if inner
                       (this)
                       (error "Parse error: this definition outside class"))]
+    [(list 'super method-name args)
+     (if inner
+         (super (parse method-name) (parse args #t))
+         (error "Parse error: can't use super outside of a method"))]
     [(list 'get obj fld-name) (get (parse obj inner) (parse fld-name inner))]
     [(list 'set obj fld-name new-val) (set (parse obj inner) (parse fld-name inner) (parse new-val inner))]
     [(list 'new class-id) (new (parse class-id inner))]
@@ -164,7 +171,7 @@ Este método no crea un nuevo ambiente.
 (define (parse-class member)
   (match member
     [(list 'field id value) (field id (parse value))]
-    [(list 'method id args-list body) (method id args-list (parse body #t))]))
+    [(list 'method id args-list body) (method id args-list (parse body #t #t))]))
 ;; parse-def :: s-expr -> Def
 (define (parse-def s-expr)
   (match s-expr
@@ -195,7 +202,7 @@ Este método no crea un nuevo ambiente.
                      #t)) defs)       
        (interp body new-env))     
      ]
-    [(class members) (classV (filter field? members) (filter method? members))]
+    [(class super-class members) (classV (filter field? members) (filter method? members))]
     [(new e) (def (classV field-list method-list) (interp e env))
              (def obj-env (make-fields-env field-list env))
              (def mythis (box 'undefined))

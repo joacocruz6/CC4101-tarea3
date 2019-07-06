@@ -207,3 +207,49 @@ Test para soporte de herencia
                                 {method m () {super h 10}}}}
                    {define o {new c2}}]
                   {send o m}}) 14)
+;; Field shadowing
+(test (run-val '(local
+              [(define A (class 
+                           [field x 1]
+                           [field y 0]
+                           [method ax () (get this x)]))
+               (define B (class <: A
+                           [field x 2]
+                           [method bx () (get this x)]))
+               (define b (new B))]
+              (send b ax))) 1)
+(test (run-val '(local
+                  [(define A (class
+                                 [field x 1]
+                               [field y 0]
+                               [method ax () {seqn {set this x 10} 20}
+                                       ]
+                               )
+                     )
+                   (define B (class <: A
+                                [field x 2]
+                                [method bx () (get this x)]
+                                ))
+                   (define o (new B))]
+                   (seqn
+                    (send o ax)
+                    (send o bx)))) 2)
+;; Funciones como azucar sintactico:
+(test (parse '{fun {x} {+ x x}}) (new (class (class 'undefined '()) (list (method 'm '(x) (binop + (id 'x) (id 'x)))))))
+(test (run-val
+       '{{fun {x} {+ x x}} 2}) 4)
+(test (run-val '{local
+                  [{define f {fun {x y} {+ x y}}}
+                   {define a 10}
+                   {define g {fun {x y} {+ a {f x y}}}}]
+                  {g 20 30}}) 60)
+(test (run-val '{local
+                  [{define f {fun {x y} {+ x y}}}
+                   {define a 10}
+                   {define g {fun {x y} {+ a {f x y}}}}
+                   {define a 20}]
+                  {g 20 30}}) 60)
+(test (run-val '(local
+              [(define f (fun (x)
+                              (+ x x)))]
+              (f 5))) 10)

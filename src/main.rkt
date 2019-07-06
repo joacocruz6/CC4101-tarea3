@@ -156,7 +156,7 @@ Este método no crea un nuevo ambiente.
     [(list 'this) (if inner
                       (this)
                       (error "Parse error: this definition outside class"))]
-    [(list 'super method-name args ...)
+    [(list 'super method-name args ... )
      (if inner
          (super method-name args)
          (error "Parse error: can't use super outside of a method"))]
@@ -164,6 +164,8 @@ Este método no crea un nuevo ambiente.
     [(list 'set obj fld-name new-val) (set (parse obj inner) (parse fld-name inner) (parse new-val inner))]
     [(list 'new class-id) (new (parse class-id inner))]
     [(list 'send obj m-id args ...) (send (parse obj inner) m-id args)]
+    [(list 'fun args body) (new (class object-class (list (method 'm args (parse body)))))]
+    [(list fexpr args ...) (send (parse fexpr) 'm args)]
     ))
 
 ;; parse-class ::= s-expr -> Expr

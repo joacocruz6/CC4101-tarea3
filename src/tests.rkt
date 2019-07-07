@@ -41,14 +41,14 @@
                     10)
                         this}) "Parse error: this definition outside class")
 ]
-;;Test of make fields enviroment
-#;(test (make-fields-env (list (field 'x (num 2))) empty-env) (aEnv (hash 'x (numV 2)) (mtEnv))) ;; Falla por como esta implementado hash :/
+;;Test of init-field
+(test (init-field (list (field 'x (num 2))) empty-env) (list (cons 'x (box (numV 2)))))
 ;;Test of field lookup
-(test (field-lookup 'x (list (field 'x (num 2)) (field 'y (bool #f))) object (make-fields-env (list (field 'x (num 2)) (field 'y (bool #f))) object empty-env)) (box (numV 2)))
-(test/exn (field-lookup 'z (list (field 'x (num 2)) (field 'y (bool #f))) object (make-fields-env (list (field 'x (num 2)) (field 'y (bool #f))) object empty-env)) "field not found")
+(test (field-lookup 'x (list (cons 'x (box (numV 2))) (cons 'y (box (boolV #f)))) object) (box (numV 2)))
+(test/exn (field-lookup 'z (list (cons 'x (box (numV 2))) (cons 'y (box (boolV #f)))) object) "field not found")
 ;;Test of method lookup
-(test (method-lookup 'm (list (method 'm '() (binop + (num 1) (num 2))) (method 'foo '() (this))) object) (method 'm '() (binop + (num 1) (num 2))))
-(test/exn (method-lookup 'bar (list (method 'm '() (binop + (num 1) (num 2))) (method 'foo '() (this))) object) "method not found")
+(test (method-lookup 'm (classV empty-env object '() (list (method 'm '() (binop + (num 1) (num 2))) (method 'foo '() (this))))) (cons (method 'm '() (binop + (num 1) (num 2))) (classV empty-env object '() (list (method 'm '() (binop + (num 1) (num 2))) (method 'foo '() (this))))))
+(test/exn (method-lookup 'bar (classV empty-env object '() (list (method 'm '() (binop + (num 1) (num 2))) (method 'foo '() (this))))) "method not found")
 ;;General test for main
 (test (run-val '{local
                   ([define A

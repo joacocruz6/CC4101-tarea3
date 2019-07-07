@@ -59,8 +59,8 @@
 (deftype Val
   (numV n)
   (boolV b)
-  (classV parent-class field-list methods-list)
-  (objectV obj-env class-ref))
+  (classV env parent-class field-list methods-list)
+  (objectV class-ref))
 ;; definiciones de ambiente
 (deftype Def
   (my-def id expr))
